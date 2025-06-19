@@ -1,73 +1,57 @@
-FROM library/archlinux
-RUN pacman -Syu --noconfirm && \
-    pacman -S --noconfirm base-devel git git-lfs htop sudo nano vim man-db zsh fish ripgrep stow which emacs-nox multitail ruby openssh \
-    lsof jq zip unzip meson docker clang lld rlwrap clojure go rustup cmake apache nginx php php-fpm php-gd php-pgsql php-sqlite python-pip nodejs npm wget \
-     && locale-gen en_US.UTF-8 
+# Base image: Native Kali Linux for maximum compatibility and minimal size.
+FROM kalilinux/kali-rolling
 
-### Gitpod user ###
-COPY sudoers /etc
-RUN useradd -l -u 33333 -G wheel -md /home/gitpod -s /bin/bash -p gitpod gitpod \
-    # To emulate the workspace-session behavior within dazzle build env
-    && mkdir /workspace && chown -hR gitpod:gitpod /workspace
+# Set environment variables for non-interactive installation
+ENV DEBIAN_FRONTEND=noninteractive
 
-ENV HOME=/home/gitpod
-WORKDIR $HOME
-# custom Bash prompt
-COPY --chown=gitpod:gitpod bash.bashrc /home/gitpod/.bashrc
+# Update, upgrade, and install a curated toolset in a single layer to optimize size.
+RUN apt-get update && apt-get -y upgrade && \
+    apt-get install -y --no-install-recommends \
+    # --- Gitpod Essentials ---
+    git \
+    sudo \
+    curl \
+    tini \
+    # --- Tools for Report Vulnerabilities ---
+    # For 'Advanced SQL Injection' (HIGH severity) [2]
+    sqlmap \
+    # For general web vulnerability testing [1][2]
+    burpsuite \
+    # For file retrieval and scripting
+    wget \
+    # Python + Pip are required for git-dumper
+    python3 \
+    python3-pip \
+    # --- User Experience (UX) Enhancements ---
+    # Shells and terminal multiplexers
+    zsh \
+    tmux \
+    zsh-syntax-highlighting \
+    zsh-autosuggestions \
+    # Common editors
+    nano \
+    vim && \
+    # --- Install Python-based tool ---
+    # For 'Git Configuration - Detect' (MEDIUM severity) [1][2]
+    pip3 install --upgrade pip && \
+    pip3 install git-dumper && \
+    # --- Gitpod User Setup ---
+    # This is critical for the image to work in Gitpod.
+    useradd -l -u 33333 -m -s /bin/zsh gitpod && \
+    echo "gitpod ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    # --- Configure Zsh for the gitpod user ---
+    # This command needs to run as the gitpod user or target the user's home directory.
+    # We will add it to the system-wide .zshrc which gitpod's new user will inherit.
+    echo "source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" >> /etc/zsh/zshrc && \
+    echo "source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /etc/zsh/zshrc && \
+    # --- Cleanup ---
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# configure git-lfs
-RUN git lfs install --system --skip-repo
-
-### Gitpod user (2) ###
+# Switch to the non-privileged user for the workspace environment.
 USER gitpod
-# use sudo so that user does not get sudo usage info on (the first) login
-RUN sudo echo "Running 'sudo' for Gitpod: success" && \
-    # create .bashrc.d folder and source it in the bashrc
-    mkdir -p /home/gitpod/.bashrc.d && \
-    (echo; echo "for i in \$(ls -A \$HOME/.bashrc.d/); do source \$HOME/.bashrc.d/\$i; done"; echo) >> /home/gitpod/.bashrc && \
-    # create a completions dir for gitpod user
-    mkdir -p /home/gitpod/.local/share/bash-completion/completions
+WORKDIR /workspace
 
-# Install some Python modules and poetry
-RUN pip install --no-cache-dir --upgrade \
-	setuptools wheel virtualenv pipenv pylint rope flake8 \
-	mypy autopep8 pep8 pylama pydocstyle bandit notebook \
-	twine && curl -sSL https://install.python-poetry.org | python
-RUN sudo rm -rf /tmp/*
-
-RUN gem install bundler --no-document \
-        && gem install solargraph --no-document
-
-# Install Homebrew
-RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-ENV PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin/:$PATH
-ENV MANPATH="$MANPATH:/home/linuxbrew/.linuxbrew/share/man"
-ENV INFOPATH="$INFOPATH:/home/linuxbrew/.linuxbrew/share/info"
-ENV HOMEBREW_NO_AUTO_UPDATE=1
-
-# Configure Docker
-USER root
-RUN wget -O /usr/bin/slirp4netns https://github.com/rootless-containers/slirp4netns/releases/download/v1.1.12/slirp4netns-x86_64 \
-    && chmod +x /usr/bin/slirp4netns
-
-RUN wget -O /usr/local/bin/docker-compose https://github.com/docker/compose/releases/download/v2.4.1/docker-compose-linux-x86_64 \
-    && chmod +x /usr/local/bin/docker-compose && mkdir -p /usr/local/lib/docker/cli-plugins && \
-    ln -s /usr/local/bin/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
-
-RUN wget -O /tmp/dive.tar.gz https://github.com/wagoodman/dive/releases/download/v0.10.0/dive_0.10.0_linux_amd64.tar.gz \
-    && tar -xf /tmp/dive.tar.gz && cp dive /usr/bin \
-    && rm -rf /tmp/* dive LICENSE README.md
-
-USER gitpod
-
-# Configure Apache and Nginx
-USER root
-RUN mkdir -p /var/run/nginx
-COPY --chown=gitpod:gitpod webserver/apache2/ /etc/apache2/
-COPY --chown=gitpod:gitpod webserver/nginx/ /etc/nginx/
-ENV APACHE_DOCROOT_IN_REPO="public"
-ENV NGINX_DOCROOT_IN_REPO="public"
-USER gitpod
-
-# Custom PATH additions
-ENV PATH=$HOME/.local/bin:$PATH
+# The CMD is not strictly necessary as Gitpod will override it,
+# but it's good practice for running the container elsewhere.
+CMD [ "zsh" ]
