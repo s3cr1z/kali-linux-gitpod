@@ -1,0 +1,92 @@
+{
+  "name": "Kali Pentest Lab - Gitpod",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "hostRequirements": {
+    "storage": "32gb"
+  },
+  "runArgs": [
+    "--network=host",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--privileged"
+  ],
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+  "workspaceFolder": "/workspace",
+  "remoteUser": "gitpod",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/bin/zsh",
+            "args": ["-l"]
+          }
+        },
+        "editor.fontFamily": "'Fira Code', monospace",
+        "editor.fontLigatures": true,
+        "workbench.colorTheme": "Default Dark+",
+        "files.autoSave": "afterDelay",
+        "files.autoSaveDelay": 1000
+      },
+      "extensions": [
+        "ms-vscode.vscode-json",
+        "ms-python.python",
+        "streetsidesoftware.code-spell-checker",
+        "formulahendry.terminal",
+        "ms-vscode.hexeditor",
+        "ms-vscode-remote.remote-containers",
+        "foxundermoon.shell-format",
+        "timonwong.shellcheck",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "ms-vscode.markdown-preview-enhanced"
+      ]
+    }
+  },
+  "forwardPorts": [
+    8080,
+    8000,
+    9000,
+    3000
+  ],
+  "portsAttributes": {
+    "8080": {
+      "label": "Burp Suite Proxy",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "HTTP Server",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "echo 'Kali Pentest Environment Ready! 🛡️' && zsh -c 'source ~/.zshrc && echo \"Tools installed: sqlmap, git-dumper, burpsuite, wget, curl\"'",
+  "remoteEnv": {
+    "TERM": "xterm-256color",
+    "SHELL": "/bin/zsh",
+    "LANG": "en_US.UTF-8",
+    "LC_ALL": "en_US.UTF-8"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": false,
+      "configureZshAsDefaultShell": true,
+      "username": "gitpod",
+      "userUid": "33333",
+      "userGid": "33333"
+    }
+  },
+  "onCreateCommand": [
+    "sudo chown -R gitpod:gitpod /workspace"
+  ],
+  "updateContentCommand": [
+    "echo 'Updating pentest tools...'",
+    "sudo apt update && sudo apt upgrade -y"
+  ]
+}
