@@ -9,3 +9,5 @@ github:
     pullRequestsFromForks: true
     addCheck: true
     addComment: true
+tasks:
+  - init: echo "Kali ready!"
